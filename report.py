@@ -457,4 +457,7 @@ def build(d, P, out_path):
     widths(ws, [16, 120])
     wb.move_sheet('参数', offset=-(wb.index(wb['参数']) - 2))
     wb.save(out_path)
+    stats_ = {'camp': n_d, 'pad': n_a, 'tgt': n_t, 'qry': n_q, 'pl': n_pl, 'sku': n_s, 'campaigns': n_c, 'opt': len(opt), 'sheets': list(wb.sheetnames)}
+    wb.close(); del wb
+    return stats_
     return {'camp': n_d, 'pad': n_a, 'tgt': n_t, 'qry': n_q, 'pl': n_pl, 'sku': n_s, 'campaigns': n_c, 'opt': len(opt), 'sheets': wb.sheetnames}
