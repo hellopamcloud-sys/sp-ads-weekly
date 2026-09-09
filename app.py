@@ -34,6 +34,7 @@ def periods(today=None, weeks=5):
 def recalc(path, timeout=240):
     """LibreOffice 无头重算公式（写入缓存值，飞书/手机预览才有数字）"""
     if not shutil.which('soffice'): return 'soffice missing'
+    if os.path.getsize(path) > 30 * 1024 * 1024: return 'skipped (file too large)'
     prof = tempfile.mkdtemp(prefix='lo-')
     try:
         subprocess.run(['soffice', '--headless', '--norestore', f'-env:UserInstallation=file://{prof}', '--terminate_after_init'], capture_output=True, timeout=60)
@@ -86,7 +87,9 @@ def run(dry=False, today=None, no_send=False, cache_dir=None):
     fname = f"SP广告周报_{P['snap'].strftime('%Y%m%d')}_成熟{P['start'].strftime('%m%d')}-{P['mature_end'].strftime('%m%d')}.xlsx"
     path = os.path.join(OUT_DIR, fname)
     stats = report.build(d, P, path)
-    rc = recalc(path); n_err, ex = check_errors(path)
+    import gc; gc.collect()  # 释放 openpyxl 工作簿内存，再启动 LibreOffice，降低内存峰值（小内存主机会被驱逐）
+    rc = recalc(path) if os.environ.get('RECALC', '1') != '0' else 'skipped'
+    n_err, ex = check_errors(path) if rc == 'ok' else (0, [])
     res = {'file': fname, 'path': path, 'periods': {k: str(v) for k, v in P.items() if k in ('snap', 'start', 'end', 'mature_end', 'week_of')}, 'stats': stats, 'suggest_new': n_new, 'suggest_refreshed': n_upd, 'recalc': rc, 'formula_errors': n_err, 'error_cells': ex, 'seconds': round(time.time() - t0)}
     if dry or no_send: return res
     tok = fs.upload_file(path, FOLDER, fname); link = fs.share_link(tok)
