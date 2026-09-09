@@ -60,21 +60,27 @@ def field_names_of(app, table):
     return _fields_cache[table]
 
 
-def read_all(app, table, field_names=None, filter_=None, page_size=500):
-    out, pt = [], None
+def read_all(app, table, field_names=None, filter_=None, page_size=200):
+    """分页读取全部记录；飞书对单页返回体大小有限制（code 1254002），遇到时自动减小 page_size 重读"""
     body = {'field_names': field_names or field_names_of(app, table)}  # search 接口不传 field_names 时可能不返回记录
     if filter_: body['filter'] = filter_
     while True:
-        q = {'page_size': page_size}
-        if pt: q['page_token'] = pt
-        r = call('POST', f'/bitable/v1/apps/{app}/tables/{table}/records/search', body, q)
-        d = r.get('data') or {}
-        for it in d.get('items', []):
-            f = {k: txt(v) for k, v in (it.get('fields') or {}).items()}
-            f['_rid'] = it.get('record_id'); out.append(f)
-        pt = d.get('page_token') if d.get('has_more') else None
-        if not pt: break
-    return out
+        out, pt = [], None
+        try:
+            while True:
+                q = {'page_size': page_size}
+                if pt: q['page_token'] = pt
+                r = call('POST', f'/bitable/v1/apps/{app}/tables/{table}/records/search', body, q)
+                d = r.get('data') or {}
+                for it in d.get('items', []):
+                    f = {k: txt(v) for k, v in (it.get('fields') or {}).items()}
+                    f['_rid'] = it.get('record_id'); out.append(f)
+                pt = d.get('page_token') if d.get('has_more') else None
+                if not pt: return out
+        except RuntimeError as e:
+            if '1254002' in str(e) and page_size > 25:
+                page_size //= 2; continue
+            raise
 
 
 def batch_create(app, table, records):
